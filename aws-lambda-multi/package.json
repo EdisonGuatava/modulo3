@@ -1,0 +1,30 @@
+{
+  "name": "resilient-system-multi-lambda",
+  "version": "1.0.0",
+  "description": "Sistema resiliente con múltiples Lambdas para AWS",
+  "main": "orchestrator.js",
+  "scripts": {
+    "deploy": "sam deploy --template-file template-multi-lambda.yaml --guided",
+    "build": "sam build --template-file template-multi-lambda.yaml",
+    "local": "sam local start-api --template-file template-multi-lambda.yaml",
+    "test": "k6 run test-scripts/reto3.js"
+  },
+  "dependencies": {
+    "aws-sdk": "^2.1490.0"
+  },
+  "devDependencies": {
+    "@aws-sdk/client-dynamodb": "^3.0.0",
+    "@aws-sdk/client-lambda": "^3.0.0"
+  },
+  "keywords": [
+    "aws",
+    "lambda",
+    "api-gateway",
+    "dynamodb",
+    "resilient",
+    "microservices",
+    "multiple-lambdas"
+  ],
+  "author": "UltraSeguros S.A.",
+  "license": "MIT"
+}
