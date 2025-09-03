@@ -25,7 +25,7 @@ El orquestador es el **núcleo del sistema resiliente** que implementa un patró
 
 ## **🏛️ Arquitectura General**
 
-```mermaid
+```
 graph TD
     A[Petición HTTP] --> B[Orquestador]
     B --> C{Evaluar Nivel}
