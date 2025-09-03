@@ -2,21 +2,37 @@ exports.handler = async (event) => {
     try {
         console.log('Full Service - Procesando petición:', JSON.stringify(event, null, 2));
         
-        const { body, errorCount } = event;
+        const { body, errorCount, isError } = event;
         
-        // Simular procesamiento completo con todas las capacidades
-        const response = {
-            nivel: 1,
-            mensaje: 'Nivel 1: Servicio completo - Todas las funcionalidades disponibles',
-            data: body,
-            capabilities: ['transacciones', 'analisis', 'monitoreo', 'reportes'],
-            errorCount: errorCount,
-            timestamp: new Date().toISOString(),
-            processedBy: 'FullServiceLambda'
-        };
+        // En nivel completo, el comportamiento depende de si la petición es error o no
+        let response;
         
-        // Simular tiempo de procesamiento completo
-        await new Promise(resolve => setTimeout(resolve, 100));
+        if (isError) {
+            // Si la petición viene marcada como error
+            response = {
+                nivel: 1,
+                mensaje: 'Nivel 1: Operación full con error',
+                data: body,
+                capabilities: ['transacciones', 'analisis', 'monitoreo', 'reportes'],
+                errorCount: errorCount,
+                timestamp: new Date().toISOString(),
+                processedBy: 'FullServiceLambda',
+                status: 'error'
+            };
+        } else {
+            // Si la petición es exitosa, servicio completo normal
+            response = {
+                nivel: 1,
+                mensaje: 'Nivel 1: Ok',
+                data: body,
+                capabilities: ['transacciones', 'analisis', 'monitoreo', 'reportes'],
+                errorCount: errorCount,
+                timestamp: new Date().toISOString(),
+                processedBy: 'FullServiceLambda',
+                status: 'full'
+            };
+        }
+        
         
         console.log('Full Service - Respuesta generada:', JSON.stringify(response, null, 2));
         
@@ -26,7 +42,7 @@ exports.handler = async (event) => {
         console.error('Error en Full Service:', error);
         return {
             nivel: 1,
-            mensaje: 'Error en servicio completo',
+            mensaje: 'Nivel 1: Operación full con error',
             error: error.message,
             timestamp: new Date().toISOString()
         };

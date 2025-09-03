@@ -2,22 +2,37 @@ exports.handler = async (event) => {
     try {
         console.log('Degraded Service - Procesando petición:', JSON.stringify(event, null, 2));
         
-        const { body, errorCount } = event;
+        const { body, errorCount, isError } = event;
         
-        // Servicio degradado: solo funcionalidades esenciales
-        const response = {
-            nivel: 2,
-            mensaje: 'Nivel 2: Servicio degradado - Funcionalidades esenciales activas',
-            data: body,
-            capabilities: ['transacciones', 'monitoreo'], // Solo lo esencial
-            errorCount: errorCount,
-            timestamp: new Date().toISOString(),
-            processedBy: 'DegradedServiceLambda',
-            warning: 'Algunas funcionalidades no disponibles temporalmente'
-        };
+        // En nivel degradado, el comportamiento depende de si la petición es error o no
+        let response;
         
-        // Simular tiempo de procesamiento reducido
-        await new Promise(resolve => setTimeout(resolve, 50));
+        if (isError) {
+            // Si la petición viene marcada como error, operación limitada
+            response = {
+                nivel: 2,
+                mensaje: 'Nivel 2: Operación límitada',
+                data: body,
+                capabilities: ['transacciones-basicas', 'monitoreo'],
+                errorCount: errorCount,
+                timestamp: new Date().toISOString(),
+                processedBy: 'DegradedServiceLambda',
+                status: 'limited'
+            };
+        } else {
+            // Si la petición es exitosa, servicio degradado normal
+            response = {
+                nivel: 2,
+                mensaje: 'Nivel 2: Ok',
+                data: body,
+                capabilities: ['transacciones-basicas', 'monitoreo'],
+                errorCount: errorCount,
+                timestamp: new Date().toISOString(),
+                processedBy: 'DegradedServiceLambda',
+                status: 'degraded'
+            };
+        }
+        
         
         console.log('Degraded Service - Respuesta generada:', JSON.stringify(response, null, 2));
         
@@ -27,7 +42,7 @@ exports.handler = async (event) => {
         console.error('Error en Degraded Service:', error);
         return {
             nivel: 2,
-            mensaje: 'Error en servicio degradado',
+            mensaje: 'Nivel 2: Operación límitada',
             error: error.message,
             timestamp: new Date().toISOString()
         };

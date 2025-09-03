@@ -20,20 +20,16 @@ exports.handler = async (event) => {
         const isError = body.error === true;
         const currentTime = Date.now();
         
-        // Calcular minuto basado en el reloj real (alineado con K6)
         const date = new Date(currentTime);
-        const currentMinute = Math.floor(date.getTime() / 60000); // Minuto desde epoch
-        const currentRealMinute = date.getMinutes(); // Minuto del reloj (0-59)
-        const currentHour = date.getHours();
+        const currentMinute = date.getTime() - (date.getTime() % 60000); // Minuto exacto en timestamp
+        const previousMinute = currentMinute - 60000; // Exactamente 1 minuto atrás
         
         // Para debug: mostrar tiempo real
-        console.log(`Tiempo real: ${date.toISOString()}, Minuto del reloj: ${currentRealMinute}, Epoch minute: ${currentMinute}`);
-        
-        const previousMinute = currentMinute - 1;
+        console.log(`Tiempo real: ${date.toISOString()}, Current minute timestamp: ${currentMinute}, Previous minute timestamp: ${previousMinute}`);
         
         // Leer estado actual del sistema
         const state = await getSystemState();
-        let { errorsByMinute = {}, currentLevel = 1, lastCheckedMinute = currentMinute - 1 } = state;
+        let { errorsByMinute = {}, currentLevel = 1, lastCheckedMinute = currentMinute - 60000 } = state;
         
         // Registrar error si viene marcado como error en el minuto actual
         if (isError) {
@@ -41,18 +37,18 @@ exports.handler = async (event) => {
                 errorsByMinute[currentMinute] = 0;
             }
             errorsByMinute[currentMinute]++;
-            console.log(`Error registrado en minuto ${currentMinute}. Total errores en este minuto: ${errorsByMinute[currentMinute]}`);
+            console.log(`Error registrado en timestamp ${currentMinute}. Total errores en este minuto: ${errorsByMinute[currentMinute]}`);
         }
         
         // Determinar nivel de servicio basado en errores del minuto anterior
         let level = currentLevel;
         const previousLevel = level;
         
-        // Solo recalcular nivel si cambiamos de minuto real del reloj
+        // Solo recalcular nivel si cambiamos de minuto timestamp
         if (currentMinute > lastCheckedMinute) {
             const errorsInPreviousMinute = errorsByMinute[previousMinute] || 0;
             console.log(`=== CAMBIO DE MINUTO ===`);
-            console.log(`Minuto anterior (${previousMinute}): ${errorsInPreviousMinute} errores`);
+            console.log(`Minuto anterior (timestamp ${previousMinute}): ${errorsInPreviousMinute} errores`);
             console.log(`Nivel actual: ${currentLevel}`);
             
             // Lógica de transición basada en errores del minuto anterior
@@ -82,22 +78,21 @@ exports.handler = async (event) => {
             
             lastCheckedMinute = currentMinute;
         } else {
-            console.log(`⏰ Mismo minuto ${currentMinute}, manteniendo nivel ${level}`);
+            console.log(`⏰ Mismo minuto timestamp ${currentMinute}, manteniendo nivel ${level}`);
         }
         
         // Limpiar errores de minutos muy antiguos (mantener solo últimos 10 minutos)
-        const cutoffMinute = currentMinute - 10;
-        Object.keys(errorsByMinute).forEach(minute => {
-            if (parseInt(minute) < cutoffMinute) {
-                delete errorsByMinute[minute];
+        const cutoffTimestamp = currentMinute - (10 * 60000); // 10 minutos atrás
+        Object.keys(errorsByMinute).forEach(timestamp => {
+            if (parseInt(timestamp) < cutoffTimestamp) {
+                delete errorsByMinute[timestamp];
             }
         });
         
         // Guardar nuevo estado
         await saveSystemState(errorsByMinute, level, lastCheckedMinute);
         
-        // Invocar Lambda correspondiente según el nivel
-        let response;
+        // Preparar payload para las Lambdas
         const errorsInCurrentMinute = errorsByMinute[currentMinute] || 0;
         const payload = {
             body: body,
@@ -109,29 +104,52 @@ exports.handler = async (event) => {
             errorsInPreviousMinute: errorsByMinute[previousMinute] || 0
         };
         
+        // Invocar Lambda correspondiente según el nivel
+        let lambdaResponse;
         switch (level) {
             case 1:
-                response = await invokeLambda(process.env.FULL_SERVICE_LAMBDA, payload);
+                lambdaResponse = await invokeLambda(process.env.FULL_SERVICE_LAMBDA, payload);
                 break;
             case 2:
-                response = await invokeLambda(process.env.DEGRADED_SERVICE_LAMBDA, payload);
+                lambdaResponse = await invokeLambda(process.env.DEGRADED_SERVICE_LAMBDA, payload);
                 break;
             case 3:
-                response = await invokeLambda(process.env.MINIMAL_SERVICE_LAMBDA, payload);
+                lambdaResponse = await invokeLambda(process.env.MINIMAL_SERVICE_LAMBDA, payload);
                 break;
             default:
-                response = { nivel: 1, mensaje: 'Servicio por defecto' };
+                lambdaResponse = { nivel: 1, mensaje: 'Servicio por defecto' };
         }
         
-        // Agregar información de contexto al response
-        response.debug = {
-            currentMinute: currentMinute,
-            previousMinute: previousMinute,
-            errorsInCurrentMinute: errorsInCurrentMinute,
-            errorsInPreviousMinute: errorsByMinute[previousMinute] || 0,
-            levelDecidedBy: `Errores del minuto ${previousMinute}: ${errorsByMinute[previousMinute] || 0}`,
-            transition: level !== previousLevel ? `${previousLevel} → ${level}` : 'Sin cambio'
-        };
+        // Generar respuesta usando solo el mensaje de la Lambda invocada
+        let response;
+        if (lambdaResponse && lambdaResponse.mensaje) {
+            response = {
+                message: lambdaResponse.mensaje
+            };
+        } else {
+            // Fallback si la Lambda no responde correctamente
+            switch (level) {
+                case 1:
+                    response = {
+                        message: isError ? "Nivel 1: Operación full con error" : "Nivel 1: Ok"
+                    };
+                    break;
+                case 2:
+                    response = {
+                        message: isError ? "Nivel 2: Operación límitada" : "Nivel 2: Ok"
+                    };
+                    break;
+                case 3:
+                    response = {
+                        message: isError ? "Nivel 3: Sistema bajo mantenimiento, intente más tarde" : "Nivel 3: Operación al mínimo"
+                    };
+                    break;
+                default:
+                    response = {
+                        message: "Nivel 1: Ok"
+                    };
+            }
+        }
         
         console.log(`Orchestrator - Respuesta nivel ${level}:`, JSON.stringify(response, null, 2));
         
@@ -153,9 +171,7 @@ exports.handler = async (event) => {
                 'Access-Control-Allow-Origin': '*'
             },
             body: JSON.stringify({
-                nivel: 3,
-                mensaje: 'Error interno del sistema',
-                error: error.message
+                message: "Nivel 3: Sistema bajo mantenimiento, intente más tarde"
             })
         };
     }
@@ -171,14 +187,14 @@ async function getSystemState() {
         return result.Item || { 
             errorsByMinute: {}, 
             currentLevel: 1, 
-            lastCheckedMinute: Math.floor(Date.now() / 60000) - 1 
+            lastCheckedMinute: Date.now() - (Date.now() % 60000) - 60000 
         };
     } catch (error) {
         console.error('Error leyendo estado del sistema:', error);
         return { 
             errorsByMinute: {}, 
             currentLevel: 1, 
-            lastCheckedMinute: Math.floor(Date.now() / 60000) - 1 
+            lastCheckedMinute: Date.now() - (Date.now() % 60000) - 60000 
         };
     }
 }

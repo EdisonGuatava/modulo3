@@ -11,7 +11,7 @@ exports.handler = async (event) => {
             // Si la petición viene marcada como error, respondemos con mantenimiento
             response = {
                 nivel: 3,
-                mensaje: 'Nivel 3: Sistema bajo mantenimiento, intente más tarde',
+                mensaje: 'Nivel 3:Sistema bajo mantenimiento, intente más tarde',
                 data: body,
                 errorCount: errorCount,
                 timestamp: new Date().toISOString(),
@@ -32,8 +32,6 @@ exports.handler = async (event) => {
             };
         }
         
-        // Simular tiempo de procesamiento mínimo
-        await new Promise(resolve => setTimeout(resolve, 10));
         
         console.log('Minimal Service - Respuesta generada:', JSON.stringify(response, null, 2));
         
